@@ -1,11 +1,12 @@
 class CreateNdlStatAccepts < ActiveRecord::Migration
   def change
     create_table :ndl_stat_accepts do |t|
-      t.string :item_type, :null => false
       t.string :region, :null => false
-      t.integer :purchase, :null => false
-      t.integer :donation, :null => false
-      t.integer :production, :null => false
+      t.integer :accept_type_id, :null => false
+      t.integer :checkout_type_id, :null => false
+      t.integer :carrier_type_id, :null => false
+      t.integer :count, :null => false
+      t.boolean :pub_flg, :null => false
       t.references :ndl_statistic, :null => false
 
       t.timestamps

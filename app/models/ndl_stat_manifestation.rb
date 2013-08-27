@@ -1,13 +1,12 @@
 class NdlStatManifestation < ActiveRecord::Base
-  default_scope :order => :region
   belongs_to :ndl_statistic
-  attr_accessible :current_term_end_count, :dec_count, :inc_count, :previous_term_end_count, :region, :item_type
+  attr_accessible :stat_type, :checkout_type_id, :region, :carrier_type_id, :count
 
-  item_type_list = ['book', 'magazine', 'other_micro', 'other_av', 'other_file']
-  region_list = ['domestic', 'foreign', 'none']
+  stat_type_list = ['all_items', 'removed', 'removed_sum']
+  region_list = ['domestic', 'foreign']
   
-  validates_presence_of :current_term_end_count, :dec_count, :inc_count, :previous_term_end_count, :item_type
-  validates_inclusion_of :item_type, :in => item_type_list
+  validates_presence_of :stat_type, :checkout_type_id, :region, :carrier_type_id, :count
+  validates_inclusion_of :stat_type, :in => stat_type_list
   validates_inclusion_of :region, :in => region_list
-  validates_numericality_of :current_term_end_count, :dec_count, :inc_count, :previous_term_end_count
+  validates_numericality_of :checkout_type_id, :carrier_type_id, :count
 end

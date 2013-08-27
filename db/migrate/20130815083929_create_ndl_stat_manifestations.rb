@@ -1,12 +1,12 @@
 class CreateNdlStatManifestations < ActiveRecord::Migration
   def change
     create_table :ndl_stat_manifestations do |t|
-      t.string :item_type, :null => false
-      t.string :region
-      t.integer :previous_term_end_count, :null => false
-      t.integer :inc_count, :null => false
-      t.integer :dec_count, :null => false
-      t.integer :current_term_end_count, :null => false
+      t.string :stat_type, :null => false
+      t.string :region, :null => false
+      t.integer :checkout_type_id, :null => false
+      t.integer :carrier_type_id, :null => false
+      t.integer :count, :null => false
+      t.boolean :pub_flg, :null => false
       t.references :ndl_statistic, :null => false
 
       t.timestamps

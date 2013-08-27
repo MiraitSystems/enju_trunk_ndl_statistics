@@ -1,9 +1,10 @@
 class CreateNdlStatCheckouts < ActiveRecord::Migration
   def change
     create_table :ndl_stat_checkouts do |t|
-      t.string :item_type, :null => false
-      t.integer :user, :null => false
-      t.integer :item, :null => false
+      t.integer :checkout_type_id, :null => false
+      t.integer :carrier_type_id, :null => false
+      t.integer :users_count, :null => false
+      t.integer :items_count, :null => false
       t.references :ndl_statistic, :null => false
 
       t.timestamps

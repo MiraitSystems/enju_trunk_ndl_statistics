@@ -1,4 +1,4 @@
-require "enju_trunk_statistics/engine"
+require "enju_trunk_ndl_statistics/engine"
 
-module EnjuTrunkStatistics
+module EnjuTrunkNdlStatistics
 end
