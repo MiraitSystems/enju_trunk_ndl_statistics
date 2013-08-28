@@ -4,8 +4,8 @@ class NdlStatisticsController < ApplicationController
   before_filter :check_role
 
   def index
-    current_year = Time.zone.now.year
-    @term = current_year
+    current_term = Term.current_term.display_name.gsub(/平成(\d+)年度/,'\1').to_i
+    @term = current_term unless params[:term]
     respond_to do |format|
       format.html # index.html.erb
     end

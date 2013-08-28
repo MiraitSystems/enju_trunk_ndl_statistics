@@ -1,0 +1,28 @@
+ja:
+  activerecord:
+    models:
+      ndl_statistic: 支部図書館業務年報
+  ndl_statistics:
+    pub_flg:
+      "true": "公開資料"
+      "false": "非公開込み"
+    type:
+      all_items: 資料総数 
+      removed: 今年度除籍数
+      removed_sum: 除籍数
+    region:
+      domestic: 日本
+      foregin: 外国
+    checkout:
+      items_count: 貸出冊数
+      users_count: 貸出人数   
+    carrier_type:
+      print: 印刷物
+      other: それ以外 
+    access_log_type:
+      top_access: トップ画面 
+      manifestations_index: 資料の一覧画面
+      materials_show: 資料の閲覧画面
+    internal:
+      "true": 内部
+      "false": 外部

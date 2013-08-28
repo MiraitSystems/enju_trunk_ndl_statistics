@@ -47,6 +47,7 @@ class NdlStatistic < ActiveRecord::Base
     self.calc_manifestation_counts
     self.calc_accept_counts
     self.calc_checkout_counts
+    self.calc_access_counts
   rescue Exception => e
     p "Failed to calculate ndl statistics: #{e}"
     logger.error "Failed to calculate ndl statistics: #{e}"
@@ -178,6 +179,26 @@ class NdlStatistic < ActiveRecord::Base
     logger.error "Failed to calculate checkout counts: #{e}"
   end
 
+  # 4. アクセス件数
+  def calc_access_counts
+    NdlStatistic.transaction do 
+      # 内部/外部
+      [ TRUE, FALSE ].each do |internal|
+        # アクセス画面
+        AccessLog.group(:log_type).select(:log_type).map(&:log_type).each do |log_type|
+          datas = AccessLog.where(:log_type => log_type, :internal => internal).
+                            where("date between ? and ?", @prev_term_end, @curr_term_end)
+          ndl_stat_accesses.create(
+            :log_type => log_type,
+            :internal => internal,
+            :count => datas.sum(:value))
+        end
+      end
+    end
+  rescue Exception => e
+    p "Failed to access counts: #{e}"
+    logger.error "Failed to access counts: #{e}"
+  end
 private
   # excel 出力
   def self.get_ndl_report_excelx(ndl_statistic)
@@ -188,12 +209,13 @@ private
 
     logger.info "get_ndl_report_excelx filepath=#{excel_filepath}"
     
-    font_size = 10
-    height = font_size * 1.5
+    @font_size = 10
+    @height = @font_size * 1.5
 
-    # prepare header
-    checkout_types = CheckoutType.all
-    carrier_types = CarrierType.all
+    # prepare for header
+    @checkout_types = CheckoutType.all
+    @carrier_types = CarrierType.all
+    @accept_types = AcceptType.all
     
     require 'axlsx'
     Axlsx::Package.new do |p|
@@ -201,60 +223,131 @@ private
       wb.styles do |s|
         title_style = s.add_style :font_name => Setting.manifestation_list_print_excelx.fontname,
 	                          :alignment => { :vertical => :center },
-				  :sz => font_size+2, :b => true
-        header_style = s.add_style :font_name => Setting.manifestation_list_print_excelx.fontname,
+				  :sz => @font_size+2, :b => true
+        @header_style = s.add_style :font_name => Setting.manifestation_list_print_excelx.fontname,
 	                           :alignment => { :vertical => :center },
                                    :border => Axlsx::STYLE_THIN_BORDER,
-                                   :sz => font_size, :b => true
+                                   :sz => @font_size, :b => true
          
         default_style = s.add_style :font_name => Setting.manifestation_list_print_excelx.fontname,
 	                            :alignment => { :vertical => :center },
                                     :border => Axlsx::STYLE_THIN_BORDER,
-				    :sz => font_size
-        # 公開区分 
+				    :sz => @font_size
+        # 所蔵統計
+        # 公開区分
+        last_row = 3+@carrier_types.size # 所蔵数出力の最終行(合計出力用)
         [ TRUE, FALSE ].each do |pub_flg|
-#TODO          sheet_name = t("ndl_statistics.pub_flg.#{pub_flg}")
-          sheet_name = pub_flg.to_s
+          sheet_name = I18n.t("ndl_statistics.pub_flg.#{pub_flg.to_s}")
           wb.add_worksheet(:name => sheet_name) do |sheet|
             # (1) 所蔵
-	    sheet.add_row ['(1) 図書'], :style => title_style, :height => height*2
-            # 貸出区分ヘッダ
-            header = checkout_types.inject(['','']){|array,c| array += [c.name, '']}
-	    sheet.add_row header, :style => header_style, :height => height
-            #TODO checkout_types.size.times do i
-              sheet.merge_cells("C2:D2")
-              sheet.merge_cells("E2:F2")
-              sheet.merge_cells("G2:H2")
-              sheet.merge_cells("I2:J2")
-              sheet.merge_cells("K2:L2")
-              sheet.merge_cells("M2:N2")
-            #end
-            # 日本、外国区分ヘッダ
-            header = checkout_types.inject(['','']){|array,c| array += ['日本','外国']}
-            sheet.add_row header, :style => header_style, :height => height
+	    sheet.add_row ['(1) 図書'], :style => title_style, :height => @height*2
+            checkout_region_header(sheet)
 
-#            sheet.column_info.each do |c|
-#              c.width = 25
-#            end
             sheet.column_info[0].width = 15
+            sheet.column_info[1].width = 15
             TYPE_LIST.each do |type|
-              carrier_types.each do |carrier_type|
-                row = [type, carrier_type.display_name.localize]
-                checkout_types.each do |checkout_type|
+              next if pub_flg && type != 'all_items'
+              @carrier_types.each do |carrier_type|
+                row = [I18n.t("ndl_statistics.type.#{type}"), carrier_type.display_name.localize]
+                @checkout_types.each do |checkout_type|
                   REGION_LIST.each do |region|
                     data = ndl_statistic.ndl_stat_manifestations.where(:stat_type => type, :carrier_type_id => carrier_type.id,
                                                                        :checkout_type_id => checkout_type.id, :region => region).first
                     row << data.count if data
                   end
                 end
-                sheet.add_row row, :style => default_style, :height => height
+                sheet.add_row row, :style => default_style, :height => @height
               end
+              # 合計の出力
+              if type == 'all_items'
+                columns = ('C'..'Z').to_a #TODO for columns after AA
+                row = ['','合計']
+                num = @checkout_types.size*2
+                num.times do |i|
+                  column = columns[i]
+                  row << "=SUM(#{column}4:#{column}#{last_row})"
+                end
+                sheet.add_row row, :style => default_style, :height => @height
+              end
+            end
+            sheet.add_row
+            # (2) 受入
+            sheet.add_row ['(2) 受入'], :style => title_style, :height => @height*2
+            checkout_region_header(sheet)
+            # 受入区分
+            @accept_types.each do |accept_type|
+              @carrier_types.each do |carrier_type|
+                row = [accept_type.name, carrier_type.display_name.localize]
+                sum = 0
+                @checkout_types.each do |checkout_type|
+                  REGION_LIST.each do |region|
+                    data = ndl_statistic.ndl_stat_accepts.where(:accept_type_id => accept_type.id, :checkout_type_id => checkout_type.id,
+                                                                :region => region, :carrier_type_id => carrier_type.id).first
+                    row << data.count if data
+                    sum += data.count
+                  end
+                end
+                row << sum
+                sheet.add_row row, :style => default_style, :height => @height
+              end
+            end
+            # 合計の出力
+            columns = ('C'..'Z').to_a
+            @carrier_types.each_with_index do |carrier_type, index|
+              row = ['合計',carrier_type.display_name.localize]
+              num = @checkout_types.size*2+1
+              num.times do |i|
+                row_num = last_row+6+index
+                column = columns[i]
+                sum_columns = []
+                @accept_types.size.times {sum_columns << "#{column}#{row_num}";row_num+=@carrier_types.size}
+                row << "=SUM(#{sum_columns.join(',')})"
+              end
+                sheet.add_row row, :style => default_style, :height => @height
             end
           end
         end
+        # 利用統計
+        checkout_stat_types = ['items_count', 'users_count']
+        wb.add_worksheet(:name => '利用統計') do |sheet|
+          # (3) 利用
+	  sheet.add_row ['(3)利用'], :style => title_style, :height => @height*2
+          # 貸出冊数/貸出者数ヘッダ
+          header = checkout_stat_types.inject(['']){|array,t| array += [I18n.t("ndl_statistics.checkout.#{t}"),'']}
+          sheet.add_row header, :style => @header_style, :height => @height
+          # 印刷物/それ以外ヘッダ
+          header = checkout_stat_types.inject(['']){|array,t| array += [I18n.t("ndl_statistics.carrier_type.print"), I18n.t("ndl_statistics.carrier_type.other")]}
+          sheet.add_row header, :style => @header_style, :height => @height
+          @checkout_types.each do |checkout_type|
+            row = [checkout_type.display_name.localize]
+            checkout_stat_types.each do |s_type| # 貸出冊数/貸出者数
+              ['print', 'other'].each do |c_type| # 印刷物/それ以外 
+                datas = ndl_statistic.ndl_stat_checkouts.where(:checkout_type_id => checkout_type.id,
+                                                               :carrier_type_id => CarrierType.try(c_type).collect(&:id))
+                row << datas.sum(s_type)
+              end 
+            end
+            sheet.add_row row, :style => default_style, :height => @height
+          end      
+          # 合計の出力
+          columns = ('B'..'Z').to_a
+          last_row = @checkout_types.size+3
+          row = ['合計']
+          4.times do |i|
+            column = columns[i]
+            row << "=SUM(#{column}4:#{column}#{last_row})"
+          end
+          sheet.add_row row, :style => default_style, :height => @height
+        end
+        # アクセス件数
+        wb.add_worksheet(:name => 'アクセス件数') do |sheet|
+          sheet.add_row ['(4)アクセス件数'], :style => title_style, :height => @height*2
+          # 内部/外部
+          [TRUE, FALSE].each do |internal|
+          end
+        end  
         p.serialize(excel_filepath)
       end
-      logger.error "********** return"
       return excel_filepath
     end
   rescue Exception => e
@@ -262,4 +355,14 @@ private
     logger.error "Failed to create ndl report excelx: #{e}"
   end
 
+  # 貸出区分・日本/外国区分ヘッダ
+  def self.checkout_region_header(sheet)
+    # 貸出区分ヘッダ
+    header = @checkout_types.inject(['','']){|array,c| array += [c.display_name.localize, '']}
+    sheet.add_row header, :style => @header_style, :height => @height
+    # 日本、外国区分ヘッダ
+    header = @checkout_types.inject(['','']){|array,c| array += ['日本','外国']}
+    sheet.add_row header, :style => @header_style, :height => @height
+  end
+ 
 end
