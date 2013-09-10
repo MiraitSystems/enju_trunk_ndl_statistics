@@ -3,6 +3,7 @@ class NdlStatistic < ActiveRecord::Base
   has_many :ndl_stat_manifestations, :dependent => :destroy
   has_many :ndl_stat_accepts, :dependent => :destroy
   has_many :ndl_stat_checkouts, :dependent => :destroy
+  has_many :ndl_stat_accesses, :dependent => :destroy
   attr_accessible :term_id
   
   term_ids = Term.select(:id).map(&:id)
