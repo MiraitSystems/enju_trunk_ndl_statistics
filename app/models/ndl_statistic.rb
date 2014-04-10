@@ -70,8 +70,11 @@ class NdlStatistic < ActiveRecord::Base
             query += " AND circulation_status_id = #{@circulation_removed_id}"
             query += " AND removed_at between ? and ?" if type == "removed"
           end
-          items_all = type == "removed" ? Item.joins(:manifestation).where(query, @curr_term_end, @prev_term_end, @curr_term_end):
-                                          Item.joins(:manifestation).where(query, @curr_term_end)
+          if type == "removed"
+            items_all = Item.joins(:manifestation).where(query, @curr_term_end, @prev_term_end, @curr_term_end)
+          else
+            items_all = Item.joins(:manifestation).where(query, @curr_term_end)
+          end
         
           # 日本、外国
           REGION_LIST.each do |region|
